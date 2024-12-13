@@ -4,6 +4,7 @@ import requests
 from PIL import Image  
 from io import BytesIO  
 import base64  
+import asyncio  
   
 # Constants for OpenAI  
 AZURE_OPENAI_API_KEY = "783973291a7c4a74a1120133309860c0"  
@@ -52,7 +53,7 @@ def encode_image(image):
     image.save(buffered, format="PNG")  
     return base64.b64encode(buffered.getvalue()).decode("utf-8")  
   
-def get_image_explanation(base64_image):  
+async def get_image_explanation(base64_image):  
     headers = {  
         "Content-Type": "application/json",  
         "api-key": AZURE_OPENAI_API_KEY  
@@ -82,7 +83,7 @@ def get_image_explanation(base64_image):
         st.error(f"Error: {response.status_code} - {response.text}")  
         return None  
   
-def refine_explanation_with_feedback(explanation, feedback):  
+async def refine_explanation_with_feedback(explanation, feedback):  
     prompt = f"""  
     Based on the original explanation: "{explanation}", incorporate the following user feedback to refine the description: "{feedback}".  
     """  
@@ -91,7 +92,7 @@ def refine_explanation_with_feedback(explanation, feedback):
         {"role": "user", "content": prompt}  
     ]  
     try:  
-        response = openai.ChatCompletion.create(  
+        response = await openai.ChatCompletion.acreate(  
             deployment_id=AZURE_DEPLOYMENT_NAME,  
             messages=messages,  
             max_tokens=500,  
@@ -102,14 +103,14 @@ def refine_explanation_with_feedback(explanation, feedback):
     except Exception as e:  
         return f"Error: {str(e)}"  
   
-def refine_prompt(selected_prompt):  
+async def refine_prompt(selected_prompt):  
     prompt = f"How would you like to enhance this prompt: \"{selected_prompt}\" while keeping its original essence?"  
     messages = [  
         {"role": "system", "content": "You are a helpful AI assistant focused on enhancing prompts."},  
         {"role": "user", "content": prompt}  
     ]  
     try:  
-        response = openai.ChatCompletion.create(  
+        response = await openai.ChatCompletion.acreate(  
             deployment_id=AZURE_DEPLOYMENT_NAME,  
             messages=messages,  
             max_tokens=150,  # Increased max_tokens to avoid cutting off  
@@ -120,7 +121,7 @@ def refine_prompt(selected_prompt):
     except Exception as e:  
         return f"Error: {str(e)}"  
   
-def generate_prompt_library(user_input):  
+async def generate_prompt_library(user_input):  
     prompt = f"""  
     Based on the user's input: "{user_input}", generate three concise and imaginative image prompt suggestions.  
     Ensure each suggestion is relevant to the input and encourages creativity.  
@@ -130,7 +131,7 @@ def generate_prompt_library(user_input):
         {"role": "user", "content": prompt}  
     ]  
     try:  
-        response = openai.ChatCompletion.create(  
+        response = await openai.ChatCompletion.acreate(  
             deployment_id=AZURE_DEPLOYMENT_NAME,  
             messages=messages,  
             max_tokens=750,  # Ensures completeness  
@@ -141,7 +142,7 @@ def generate_prompt_library(user_input):
     except Exception as e:  
         return [f"Error generating suggestions: {str(e)}"]  
   
-def get_follow_up(input_text):  
+async def get_follow_up(input_text):  
     prompt = f"""  
     Based on the user's initial input: \"{input_text}\", ask the following questions exactly as written,   
     without altering or adding any additional context:   
@@ -157,7 +158,7 @@ def get_follow_up(input_text):
         {"role": "user", "content": prompt}  
     ]  
     try:  
-        response = openai.ChatCompletion.create(  
+        response = await openai.ChatCompletion.acreate(  
             deployment_id=AZURE_DEPLOYMENT_NAME,  
             messages=messages,  
             max_tokens=500,  
@@ -176,12 +177,12 @@ def display_prompt_library():
             for title, prompt in prompts:  
                 if st.button(title):  
                     st.session_state.selected_prompt = prompt  
-                    follow_up_question = refine_prompt(prompt)  
+                    follow_up_question = asyncio.run(refine_prompt(prompt))  
                     st.session_state.messages.append({"role": "assistant", "content": follow_up_question})  
                     st.session_state.awaiting_followup_response = True  
                     return  
   
-def finalize_prompt(conversation):  
+async def finalize_prompt(conversation):  
     prompt = "Craft a concise and comprehensive image prompt using the specific details provided by the user in the conversation. "  
     prompt += "Incorporate all relevant graphical elements discussed, such as colors, textures, shapes, lighting, depth, and style, without making assumptions or adding speculative details. "  
   
@@ -197,7 +198,7 @@ def finalize_prompt(conversation):
         {"role": "user", "content": prompt}  
     ]  
     try:  
-        response = openai.ChatCompletion.create(  
+        response = await openai.ChatCompletion.acreate(  
             deployment_id=AZURE_DEPLOYMENT_NAME,  
             messages=messages,  
             max_tokens=750,  # Increased max_tokens to ensure completeness  
@@ -238,7 +239,7 @@ def handle_image_input(image_file):
     if image_file:  
         image = Image.open(image_file)  
         encoded_image = encode_image(image)  
-        explanation = get_image_explanation(encoded_image)  
+        explanation = asyncio.run(get_image_explanation(encoded_image))  
         st.session_state.messages.append({"role": "assistant", "content": explanation})  
         st.session_state.refined_explanation = explanation  
   
@@ -252,14 +253,14 @@ def chat_interface():
     if user_input:  
         if st.session_state.awaiting_followup_response:  
             # Handle feedback for image explanation  
-            refined_explanation = refine_explanation_with_feedback(st.session_state.refined_explanation, user_input)  
+            refined_explanation = asyncio.run(refine_explanation_with_feedback(st.session_state.refined_explanation, user_input))  
             st.session_state.messages.append({"role": "assistant", "content": refined_explanation})  
             st.session_state.refined_explanation = refined_explanation  
             st.session_state.awaiting_followup_response = False  
         else:  
             st.session_state.messages.append({"role": "user", "content": user_input})  
-            st.session_state.prompt_library = generate_prompt_library(user_input)  
-            follow_up = get_follow_up(user_input)  
+            st.session_state.prompt_library = asyncio.run(generate_prompt_library(user_input))  
+            follow_up = asyncio.run(get_follow_up(user_input))  
             if follow_up:  
                 st.session_state.messages.append({"role": "assistant", "content": follow_up})  
                 st.session_state.awaiting_followup_response = True  
@@ -272,7 +273,7 @@ def chat_interface():
   
     if st.session_state.refined_explanation and not st.session_state.awaiting_followup_response:  
         # Finalize prompt from conversation  
-        final_prompt = finalize_prompt(st.session_state.messages)  
+        final_prompt = asyncio.run(finalize_prompt(st.session_state.messages))  
         st.write(f"**Final Prompt:** {final_prompt}")  
         if st.button("Generate Image"):  
             image_url = generate_image(final_prompt)  
