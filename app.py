@@ -4,6 +4,14 @@ import requests
 from PIL import Image  
 from io import BytesIO  
 import base64  
+from dotenv import load_dotenv  
+import os  
+  
+# Load environment variables from .env file  
+load_dotenv()  
+  
+# Set OpenAI API key  
+openai.api_key = os.getenv("OPENAI_API_KEY")  
   
 # Constants for OpenAI  
 AZURE_OPENAI_API_KEY = "783973291a7c4a74a1120133309860c0"  
