@@ -4,7 +4,6 @@ import requests
 from PIL import Image  
 from io import BytesIO  
 import base64  
-import asyncio  
   
 # Constants for OpenAI  
 AZURE_OPENAI_API_KEY = "783973291a7c4a74a1120133309860c0"  
@@ -53,37 +52,19 @@ def encode_image(image):
     image.save(buffered, format="PNG")  
     return base64.b64encode(buffered.getvalue()).decode("utf-8")  
   
-async def get_image_explanation(base64_image):  
-    headers = {  
-        "Content-Type": "application/json",  
-        "api-key": AZURE_OPENAI_API_KEY  
-    }  
-    data = {  
-        "model": AZURE_DEPLOYMENT_NAME,  
-        "messages": [  
-            {"role": "system", "content": "You are a helpful assistant that describes images."},  
-            {"role": "user", "content": [  
-                {"type": "text", "text": "Explain the content of this image in a single, coherent paragraph. The explanation should be concise and semantically meaningful, summarizing all major points from the image in one paragraph. Avoid using bullet points or separate lists."},  
-                {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{base64_image}"}}  
-            ]}  
-        ],  
-        "temperature": 0.7  
-    }  
+def call_openai_api(messages, max_tokens, temperature):  
+    try:  
+        response = openai.ChatCompletion.create(  
+            model="gpt-4",  # Use your appropriate model name  
+            messages=messages,  
+            max_tokens=max_tokens,  
+            temperature=temperature  
+        )  
+        return response.choices[0].message['content'].strip()  
+    except Exception as e:  
+        return f"Error: {str(e)}"  
   
-    response = requests.post(  
-        f"{AZURE_OPENAI_ENDPOINT}/openai/deployments/{AZURE_DEPLOYMENT_NAME}/chat/completions?api-version={OPENAI_API_VERSION}",  
-        headers=headers,  
-        json=data  
-    )  
-  
-    if response.status_code == 200:  
-        result = response.json()  
-        return result["choices"][0]["message"]["content"]  
-    else:  
-        st.error(f"Error: {response.status_code} - {response.text}")  
-        return None  
-  
-async def refine_explanation_with_feedback(explanation, feedback):  
+def refine_explanation_with_feedback(explanation, feedback):  
     prompt = f"""  
     Based on the original explanation: "{explanation}", incorporate the following user feedback to refine the description: "{feedback}".  
     """  
@@ -91,37 +72,17 @@ async def refine_explanation_with_feedback(explanation, feedback):
         {"role": "system", "content": "You are a helpful AI assistant who refines descriptions based on user feedback."},  
         {"role": "user", "content": prompt}  
     ]  
-    try:  
-        response = await openai.ChatCompletion.acreate(  
-            deployment_id=AZURE_DEPLOYMENT_NAME,  
-            messages=messages,  
-            max_tokens=500,  
-            temperature=0.7  
-        )  
-        refined_description = response.choices[0].message['content'].strip()  
-        return refined_description  
-    except Exception as e:  
-        return f"Error: {str(e)}"  
+    return call_openai_api(messages, 500, 0.7)  
   
-async def refine_prompt(selected_prompt):  
+def refine_prompt(selected_prompt):  
     prompt = f"How would you like to enhance this prompt: \"{selected_prompt}\" while keeping its original essence?"  
     messages = [  
         {"role": "system", "content": "You are a helpful AI assistant focused on enhancing prompts."},  
         {"role": "user", "content": prompt}  
     ]  
-    try:  
-        response = await openai.ChatCompletion.acreate(  
-            deployment_id=AZURE_DEPLOYMENT_NAME,  
-            messages=messages,  
-            max_tokens=150,  # Increased max_tokens to avoid cutting off  
-            temperature=0.7  
-        )  
-        follow_up_question = response.choices[0].message['content'].strip()  
-        return follow_up_question  
-    except Exception as e:  
-        return f"Error: {str(e)}"  
+    return call_openai_api(messages, 150, 0.7)  
   
-async def generate_prompt_library(user_input):  
+def generate_prompt_library(user_input):  
     prompt = f"""  
     Based on the user's input: "{user_input}", generate three concise and imaginative image prompt suggestions.  
     Ensure each suggestion is relevant to the input and encourages creativity.  
@@ -130,19 +91,10 @@ async def generate_prompt_library(user_input):
         {"role": "system", "content": "You are a creative assistant who generates concise image prompt suggestions."},  
         {"role": "user", "content": prompt}  
     ]  
-    try:  
-        response = await openai.ChatCompletion.acreate(  
-            deployment_id=AZURE_DEPLOYMENT_NAME,  
-            messages=messages,  
-            max_tokens=750,  # Ensures completeness  
-            temperature=0.8  
-        )  
-        suggestions = response.choices[0].message['content'].strip().split('\n')  
-        return [s.strip() for s in suggestions if s.strip()]  
-    except Exception as e:  
-        return [f"Error generating suggestions: {str(e)}"]  
+    response_content = call_openai_api(messages, 750, 0.8)  
+    return response_content.split('\n')  
   
-async def get_follow_up(input_text):  
+def get_follow_up(input_text):  
     prompt = f"""  
     Based on the user's initial input: \"{input_text}\", ask the following questions exactly as written,   
     without altering or adding any additional context:   
@@ -157,17 +109,7 @@ async def get_follow_up(input_text):
         {"role": "system", "content": "You are a helpful AI assistant focused on providing precise suggestions."},  
         {"role": "user", "content": prompt}  
     ]  
-    try:  
-        response = await openai.ChatCompletion.acreate(  
-            deployment_id=AZURE_DEPLOYMENT_NAME,  
-            messages=messages,  
-            max_tokens=500,  
-            temperature=0.7  
-        )  
-        follow_up_question = response.choices[0].message['content'].strip()  
-        return follow_up_question  
-    except Exception as e:  
-        return f"Error: {str(e)}"  
+    return call_openai_api(messages, 500, 0.7)  
   
 def display_prompt_library():  
     with st.sidebar:  
@@ -177,12 +119,12 @@ def display_prompt_library():
             for title, prompt in prompts:  
                 if st.button(title):  
                     st.session_state.selected_prompt = prompt  
-                    follow_up_question = asyncio.run(refine_prompt(prompt))  
+                    follow_up_question = refine_prompt(prompt)  
                     st.session_state.messages.append({"role": "assistant", "content": follow_up_question})  
                     st.session_state.awaiting_followup_response = True  
                     return  
   
-async def finalize_prompt(conversation):  
+def finalize_prompt(conversation):  
     prompt = "Craft a concise and comprehensive image prompt using the specific details provided by the user in the conversation. "  
     prompt += "Incorporate all relevant graphical elements discussed, such as colors, textures, shapes, lighting, depth, and style, without making assumptions or adding speculative details. "  
   
@@ -197,17 +139,7 @@ async def finalize_prompt(conversation):
         {"role": "system", "content": "You are a helpful AI assistant."},  
         {"role": "user", "content": prompt}  
     ]  
-    try:  
-        response = await openai.ChatCompletion.acreate(  
-            deployment_id=AZURE_DEPLOYMENT_NAME,  
-            messages=messages,  
-            max_tokens=750,  # Increased max_tokens to ensure completeness  
-            temperature=0.7  
-        )  
-        final_prompt = response.choices[0].message['content'].strip()  
-        return final_prompt  
-    except Exception as e:  
-        return f"Error: {str(e)}"  
+    return call_openai_api(messages, 750, 0.7)  
   
 def generate_image(prompt):  
     try:  
@@ -239,7 +171,7 @@ def handle_image_input(image_file):
     if image_file:  
         image = Image.open(image_file)  
         encoded_image = encode_image(image)  
-        explanation = asyncio.run(get_image_explanation(encoded_image))  
+        explanation = get_image_explanation(encoded_image)  
         st.session_state.messages.append({"role": "assistant", "content": explanation})  
         st.session_state.refined_explanation = explanation  
   
@@ -253,14 +185,14 @@ def chat_interface():
     if user_input:  
         if st.session_state.awaiting_followup_response:  
             # Handle feedback for image explanation  
-            refined_explanation = asyncio.run(refine_explanation_with_feedback(st.session_state.refined_explanation, user_input))  
+            refined_explanation = refine_explanation_with_feedback(st.session_state.refined_explanation, user_input)  
             st.session_state.messages.append({"role": "assistant", "content": refined_explanation})  
             st.session_state.refined_explanation = refined_explanation  
             st.session_state.awaiting_followup_response = False  
         else:  
             st.session_state.messages.append({"role": "user", "content": user_input})  
-            st.session_state.prompt_library = asyncio.run(generate_prompt_library(user_input))  
-            follow_up = asyncio.run(get_follow_up(user_input))  
+            st.session_state.prompt_library = generate_prompt_library(user_input)  
+            follow_up = get_follow_up(user_input)  
             if follow_up:  
                 st.session_state.messages.append({"role": "assistant", "content": follow_up})  
                 st.session_state.awaiting_followup_response = True  
@@ -273,7 +205,7 @@ def chat_interface():
   
     if st.session_state.refined_explanation and not st.session_state.awaiting_followup_response:  
         # Finalize prompt from conversation  
-        final_prompt = asyncio.run(finalize_prompt(st.session_state.messages))  
+        final_prompt = finalize_prompt(st.session_state.messages)  
         st.write(f"**Final Prompt:** {final_prompt}")  
         if st.button("Generate Image"):  
             image_url = generate_image(final_prompt)  
