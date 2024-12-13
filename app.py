@@ -1,9 +1,9 @@
 import streamlit as st  
 import requests  
-import logging  
 from PIL import Image  
 from io import BytesIO  
 import base64  
+import logging  
 import time  
   
 # Configure logging  
@@ -96,6 +96,38 @@ def encode_image(image):
     buffered = BytesIO()  
     image.save(buffered, format="PNG")  
     return base64.b64encode(buffered.getvalue()).decode("utf-8")  
+  
+def get_image_explanation(base64_image):  
+    headers = {  
+        "Content-Type": "application/json",  
+        "api-key": api_key  
+    }  
+    data = {  
+        "model": model,  
+        "messages": [  
+            {"role": "system", "content": "You are a helpful assistant that describes images."},  
+            {"role": "user", "content": [  
+                {"type": "text", "text": "Explain the content of this image in a single, coherent paragraph. The explanation should be concise and semantically meaningful, summarizing all major points from the image in one paragraph. Avoid using bullet points or separate lists."},  
+                {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{base64_image}"}}  
+            ]}  
+        ],  
+        "temperature": 0.7  
+    }  
+  
+    try:  
+        response = requests.post(  
+            f"{azure_endpoint}/openai/deployments/{model}/chat/completions?api-version={api_version}",  
+            headers=headers,  
+            json=data  
+        )  
+        response.raise_for_status()  
+        result = response.json()  
+        return result["choices"][0]["message"]["content"]  
+    except requests.exceptions.HTTPError as http_err:  
+        logging.error(f"HTTP error occurred: {http_err}")  
+    except Exception as e:  
+        logging.error(f"An error occurred: {e}")  
+    return "Failed to get image explanation."  
   
 def call_azure_openai(messages, max_tokens, temperature):  
     try:  
