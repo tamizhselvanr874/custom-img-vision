@@ -1,24 +1,61 @@
 import streamlit as st  
-import openai  
 import requests  
+import logging  
 from PIL import Image  
 from io import BytesIO  
 import base64  
-from dotenv import load_dotenv  
-import os  
+import time  
   
-# Load environment variables from .env file  
-load_dotenv()  
+# Configure logging  
+logging.basicConfig(level=logging.INFO)  
   
-# Set OpenAI API key  
-openai.api_key = os.getenv("OPENAI_API_KEY")  
+# Azure OpenAI Configuration  
+azure_endpoint = "https://theswedes.openai.azure.com/"  
+api_key = "783973291a7c4a74a1120133309860c0"  
+api_version = "2024-02-01"  
+model = "GPT-4o-mini"  
   
-# Constants for OpenAI  
-AZURE_OPENAI_API_KEY = "783973291a7c4a74a1120133309860c0"  
-AZURE_OPENAI_ENDPOINT = "https://theswedes.openai.azure.com/"  
-OPENAI_API_TYPE = "azure"  
-OPENAI_API_VERSION = "2024-05-01-preview"  
-AZURE_DEPLOYMENT_NAME = "GPT-4-Omni"  
+# AzureOpenAI Client Setup  
+class AzureOpenAI:  
+    def __init__(self, azure_endpoint, api_key, api_version):  
+        self.azure_endpoint = azure_endpoint  
+        self.api_key = api_key  
+        self.api_version = api_version  
+  
+    def chat_completion(self, model, messages, temperature, max_tokens):  
+        url = f"{self.azure_endpoint}/openai/deployments/{model}/chat/completions?api-version={self.api_version}"  
+        headers = {  
+            "Content-Type": "application/json",  
+            "api-key": self.api_key,  
+        }  
+        data = {  
+            "messages": messages,  
+            "temperature": temperature,  
+            "max_tokens": max_tokens,  
+        }  
+        base_delay = 1  
+        max_delay = 32  
+        max_attempts = 5  
+  
+        for attempt in range(max_attempts):  
+            try:  
+                response = requests.post(url, headers=headers, json=data)  
+                response.raise_for_status()  
+                return response.json()  
+            except requests.exceptions.RequestException as e:  
+                logging.error(f"Attempt {attempt+1} failed: {str(e)}")  
+                if attempt < max_attempts - 1:  
+                    delay = min(base_delay * 2 ** attempt, max_delay)  
+                    logging.info(f"Retrying in {delay} seconds...")  
+                    time.sleep(delay)  
+                else:  
+                    raise  
+  
+client = AzureOpenAI(  
+    azure_endpoint=azure_endpoint,  
+    api_key=api_key,  
+    api_version=api_version,  
+)  
   
 IMAGE_GENERATION_URL = "https://afsimage.azurewebsites.net/api/httpTriggerts"  
   
@@ -60,15 +97,15 @@ def encode_image(image):
     image.save(buffered, format="PNG")  
     return base64.b64encode(buffered.getvalue()).decode("utf-8")  
   
-def call_openai_api(messages, max_tokens, temperature):  
+def call_azure_openai(messages, max_tokens, temperature):  
     try:  
-        response = openai.ChatCompletion.create(  
-            model="gpt-4",  # Use your appropriate model name  
+        response = client.chat_completion(  
+            model=model,  
             messages=messages,  
-            max_tokens=max_tokens,  
-            temperature=temperature  
+            temperature=temperature,  
+            max_tokens=max_tokens  
         )  
-        return response.choices[0].message['content'].strip()  
+        return response['choices'][0]['message']['content'].strip()  
     except Exception as e:  
         return f"Error: {str(e)}"  
   
@@ -80,7 +117,7 @@ def refine_explanation_with_feedback(explanation, feedback):
         {"role": "system", "content": "You are a helpful AI assistant who refines descriptions based on user feedback."},  
         {"role": "user", "content": prompt}  
     ]  
-    return call_openai_api(messages, 500, 0.7)  
+    return call_azure_openai(messages, 500, 0.7)  
   
 def refine_prompt(selected_prompt):  
     prompt = f"How would you like to enhance this prompt: \"{selected_prompt}\" while keeping its original essence?"  
@@ -88,7 +125,7 @@ def refine_prompt(selected_prompt):
         {"role": "system", "content": "You are a helpful AI assistant focused on enhancing prompts."},  
         {"role": "user", "content": prompt}  
     ]  
-    return call_openai_api(messages, 150, 0.7)  
+    return call_azure_openai(messages, 150, 0.7)  
   
 def generate_prompt_library(user_input):  
     prompt = f"""  
@@ -99,7 +136,7 @@ def generate_prompt_library(user_input):
         {"role": "system", "content": "You are a creative assistant who generates concise image prompt suggestions."},  
         {"role": "user", "content": prompt}  
     ]  
-    response_content = call_openai_api(messages, 750, 0.8)  
+    response_content = call_azure_openai(messages, 750, 0.8)  
     return response_content.split('\n')  
   
 def get_follow_up(input_text):  
@@ -117,7 +154,7 @@ def get_follow_up(input_text):
         {"role": "system", "content": "You are a helpful AI assistant focused on providing precise suggestions."},  
         {"role": "user", "content": prompt}  
     ]  
-    return call_openai_api(messages, 500, 0.7)  
+    return call_azure_openai(messages, 500, 0.7)  
   
 def display_prompt_library():  
     with st.sidebar:  
@@ -147,7 +184,7 @@ def finalize_prompt(conversation):
         {"role": "system", "content": "You are a helpful AI assistant."},  
         {"role": "user", "content": prompt}  
     ]  
-    return call_openai_api(messages, 750, 0.7)  
+    return call_azure_openai(messages, 750, 0.7)  
   
 def generate_image(prompt):  
     try:  
