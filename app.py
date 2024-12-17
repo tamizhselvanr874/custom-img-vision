@@ -62,22 +62,8 @@ IMAGE_GENERATION_URL = "https://afsimage.azurewebsites.net/api/httpTriggerts"
 # Initialize session state variables  
 if 'messages' not in st.session_state:  
     st.session_state.messages = []  
-if 'selected_prompt' not in st.session_state:  
-    st.session_state.selected_prompt = None  
-if 'prompt_library' not in st.session_state:  
-    st.session_state.prompt_library = []  
-if 'generated_image_url' not in st.session_state:  
-    st.session_state.generated_image_url = None  
-if 'awaiting_followup_response' not in st.session_state:  
-    st.session_state.awaiting_followup_response = False  
-if 'refined_prompt' not in st.session_state:  
-    st.session_state.refined_prompt = None  
-if 'refined_explanation' not in st.session_state:  
-    st.session_state.refined_explanation = None  
 if 'current_question_index' not in st.session_state:  
     st.session_state.current_question_index = 0  
-if 'user_responses' not in st.session_state:  
-    st.session_state.user_responses = []  
 if 'final_prompt' not in st.session_state:  
     st.session_state.final_prompt = None  
   
@@ -128,7 +114,8 @@ def get_image_explanation(base64_image):
         )  
         response.raise_for_status()  
         result = response.json()  
-        return result["choices"][0]["message"]["content"]  
+        explanation = result["choices"][0]["message"]["content"]  
+        return explanation  
     except requests.exceptions.HTTPError as http_err:  
         logging.error(f"HTTP error occurred: {http_err}")  
     except Exception as e:  
@@ -147,80 +134,16 @@ def call_azure_openai(messages, max_tokens, temperature):
     except Exception as e:  
         return f"Error: {str(e)}"  
   
-def refine_explanation_with_feedback(explanation, feedback):  
-    prompt = f"""  
-    Based on the original explanation: "{explanation}", incorporate the following user feedback to refine the description: "{feedback}".  
-    """  
-    messages = [  
-        {"role": "system", "content": "You are a helpful AI assistant who refines descriptions based on user feedback."},  
-        {"role": "user", "content": prompt}  
-    ]  
-    return call_azure_openai(messages, 500, 0.7)  
-  
-def refine_prompt(selected_prompt):  
-    prompt = f"How would you like to enhance this prompt: \"{selected_prompt}\" while keeping its original essence?"  
-    messages = [  
-        {"role": "system", "content": "You are a helpful AI assistant focused on enhancing prompts."},  
-        {"role": "user", "content": prompt}  
-    ]  
-    return call_azure_openai(messages, 150, 0.7)  
-  
-def generate_prompt_library(user_input):  
-    prompt = f"""  
-    Based on the user's input: "{user_input}", generate three creative and engaging image prompt suggestions.   
-    Each suggestion should be imaginative, contextually relevant, and encourage artistic expression.   
-    Provide suggestions that explore different themes or perspectives related to the input.  
-    """  
-    messages = [  
-        {"role": "system", "content": "You are a creative assistant who generates imaginative and engaging image prompt suggestions."},  
-        {"role": "user", "content": prompt}  
-    ]  
-    response_content = call_azure_openai(messages, 750, 0.8)  
-    return response_content.split('\n')  
-  
-def get_follow_up(input_text):  
-    follow_up_questions = [  
-        "Let's add some color to your vision! What colors do you imagine dominating the scene? Think vibrant blues, calming greens, or maybe warm oranges?",  
-        "Textures bring life to images. Do you prefer a sleek and shiny surface, or something more rough and matte?",  
-        "Shapes can be so expressive! Are you seeing bold geometric forms, or perhaps softer, organic curves?",  
-        "Lighting sets the mood. Would you like it bright and lively, or perhaps a bit dimmer for a cozier feel?",  
-        "Depth can add intrigue. Would you prefer a deep, immersive perspective, or a more flat, artistic style?",  
-        "We're nearly there! What style should we aim for to capture the essence? Realistic, abstract, or maybe something else?"  
-    ]  
-  
-    remaining_steps = len(follow_up_questions) - st.session_state.current_question_index  
-    if st.session_state.current_question_index < len(follow_up_questions):  
-        question = follow_up_questions[st.session_state.current_question_index]  
-        st.session_state.current_question_index += 1  
-        return f"{question} Just {remaining_steps} more step(s) to craft your masterpiece!"  
-    else:  
-        st.session_state.awaiting_followup_response = False  
-        return None  
-  
-def display_prompt_library():  
-    with st.sidebar:  
-        st.write("**Prompt Library:**")  
-        for category, prompts in PROMPT_CATEGORIES.items():  
-            st.write(f"### {category}")  
-            for title, prompt in prompts:  
-                if st.button(title):  
-                    st.session_state.selected_prompt = prompt  
-                    follow_up_question = refine_prompt(prompt)  
-                    st.session_state.messages.append({"role": "assistant", "content": follow_up_question})  
-                    st.session_state.awaiting_followup_response = True  
-                    return  
-  
 def finalize_prompt(conversation):  
     prompt = "Craft a concise and comprehensive image prompt using the specific details provided by the user in the conversation. "  
     prompt += "Incorporate all relevant graphical elements discussed, such as colors, textures, shapes, lighting, depth, and style, without making assumptions or adding speculative details. "  
-  
-    # Collect user and assistant messages specifically  
+    prompt += "Ensure the prompt is clear, structured, and accurately reflects the user's inputs. "  
+    prompt += "End by asking: 'Are you okay with the prompt? Are there any things that need to be adjusted?'"  
     for turn in conversation:  
         if turn['role'] == 'user':  
             prompt += f"User: {turn['content']}. "  
         elif turn['role'] == 'assistant':  
             prompt += f"Assistant: {turn['content']}. "  
-  
     messages = [  
         {"role": "system", "content": "You are a helpful AI assistant."},  
         {"role": "user", "content": prompt}  
@@ -259,34 +182,43 @@ def handle_image_input(image_file):
         encoded_image = encode_image(image)  
         explanation = get_image_explanation(encoded_image)  
         st.session_state.messages.append({"role": "assistant", "content": explanation})  
-        st.session_state.refined_explanation = explanation  
+  
+def display_prompt_library():  
+    with st.sidebar:  
+        st.write("*Prompt Library:*")  
+        for category, prompts in PROMPT_CATEGORIES.items():  
+            st.write(f"### {category}")  
+            for title, prompt in prompts:  
+                if st.button(title):  
+                    st.session_state.selected_prompt = prompt  
+                    st.session_state.messages.append({"role": "assistant", "content": f"Let's start refining your idea: {prompt}"})  
+                    st.session_state.awaiting_followup_response = True  
+                    return  
   
 def chat_interface():  
     image_file = st.sidebar.file_uploader("Upload an image for explanation and refinement:", type=["png", "jpg", "jpeg"])  
-    if image_file is not None:  
-        handle_image_input(image_file)  
-  
     user_input = st.chat_input("Your message:")  
   
-    if user_input:  
+    if image_file:  
+        handle_image_input(image_file)  
+        if user_input:  
+            st.session_state.messages.append({"role": "user", "content": user_input})  
+            # Directly finalize prompt after image explanation and user input  
+            st.session_state.final_prompt = finalize_prompt(st.session_state.messages)  
+            st.session_state.messages.append({"role": "assistant", "content": f"*Final Prompt:* {st.session_state.final_prompt}"})  
+  
+    elif user_input:  
         st.session_state.messages.append({"role": "user", "content": user_input})  
   
-        if st.session_state.awaiting_followup_response:  
-            # Collect user response for current question  
-            st.session_state.user_responses.append(user_input)  
-            follow_up = get_follow_up(user_input)  
-            if follow_up:  
-                st.session_state.messages.append({"role": "assistant", "content": follow_up})  
-            else:  
-                # Finalize prompt when all questions are answered  
-                st.session_state.final_prompt = finalize_prompt(st.session_state.messages)  
-                st.session_state.messages.append({"role": "assistant", "content": f"**Final Prompt:** {st.session_state.final_prompt}"})  
-                st.session_state.awaiting_followup_response = False  
+        # Existing logic with dynamic questions  
+        if st.session_state.current_question_index < 6:  # Ask 6 questions  
+            context = ' '.join([msg['content'] for msg in st.session_state.messages])  
+            dynamic_question = generate_dynamic_questions(user_input, context)  
+            st.session_state.messages.append({"role": "assistant", "content": dynamic_question})  
+            st.session_state.current_question_index += 1  
         else:  
-            st.session_state.prompt_library = generate_prompt_library(user_input)  
-            first_question = get_follow_up(user_input)  
-            st.session_state.messages.append({"role": "assistant", "content": first_question})  
-            st.session_state.awaiting_followup_response = True  
+            st.session_state.final_prompt = finalize_prompt(st.session_state.messages)  
+            st.session_state.messages.append({"role": "assistant", "content": f"*Final Prompt:* {st.session_state.final_prompt}"})  
   
     display_prompt_library()  
   
@@ -294,13 +226,27 @@ def chat_interface():
         with st.chat_message(message["role"]):  
             st.markdown(message["content"])  
   
-    if st.session_state.final_prompt:  
-        if st.button("Generate Image"):  
-            image_url = generate_image(st.session_state.final_prompt)  
-            if image_url and "Error" not in image_url:  
-                st.session_state.generated_image_url = image_url  
-                display_image_options(image_url, "Generated Image")  
-            else:  
-                st.write("Failed to generate image.")  
+    if st.session_state.final_prompt and st.button("Generate Image"):  
+        image_url = generate_image(st.session_state.final_prompt)  
+        if image_url and "Error" not in image_url:  
+            st.session_state.generated_image_url = image_url  
+            display_image_options(image_url, "Generated Image")  
+        else:  
+            st.write("Failed to generate image.")  
+  
+def generate_dynamic_questions(user_input, conversation_history):  
+    prompt = f"""  
+    We are working with the initial concept: "{user_input}".  
+    Given the conversation so far: "{conversation_history}", generate a follow-up question or suggestion that explores one of the following aspects: colors, textures, shapes, lighting, depth, or style.  
+    The question should be engaging, concise and encourage the user to think creatively about their concept.  
+    Additionally, provide a short recommendation to inspire the user further.  
+    """  
+    messages = [  
+        {"role": "system", "content": "You are a creative assistant who generates insightful questions to refine image prompts, along with concise recommendations."},  
+        {"role": "user", "content": prompt}  
+    ]  
+    response_content = call_azure_openai(messages, 750, 0.8)  
+    question, recommendation = response_content.split("Recommendation:", 1)  
+    return f"{question.strip()}Recommendation:{recommendation.strip()}"  
   
 chat_interface()  
