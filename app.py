@@ -349,16 +349,16 @@ def generate_image(prompt):
         return f"Error: {str(e)}"
 
 
-def display_image_options(image_url, image_caption):
-    if image_url:
-        st.sidebar.image(image_url, caption=image_caption, use_column_width=True)
-        image_data = requests.get(image_url).content
-        st.sidebar.download_button(
-            label=f"Download {image_caption}",
-            data=image_data,
-            file_name=f"{image_caption.lower().replace(' ', '_')}.png",
-            mime="image/png",
-        )
+def display_image_options(image_url, image_caption):  
+    if image_url:  
+        st.sidebar.image(image_url, caption=image_caption, use_container_width=True)  
+        image_data = requests.get(image_url).content  
+        st.sidebar.download_button(  
+            label=f"Download {image_caption}",  
+            data=image_data,  
+            file_name=f"{image_caption.lower().replace(' ', '_')}.png",  
+            mime="image/png",  
+        )  
 
 
 def handle_image_input(image_file):
