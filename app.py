@@ -12,7 +12,7 @@ logging.basicConfig(level=logging.INFO)
 # Azure OpenAI Configuration
 azure_endpoint = "https://theswedes.openai.azure.com/"
 api_key = "783973291a7c4a74a1120133309860c0"
-api_version = "2024-02-01"
+api_version = "2024-02-15-preview"
 model = "GPT-4o-mini"
 
 # AzureOpenAI Client Setup
