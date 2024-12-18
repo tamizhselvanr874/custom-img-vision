@@ -6,17 +6,15 @@ import base64
 import logging
 import time
 
-# Configure logging
 logging.basicConfig(level=logging.INFO)
 
-# Azure OpenAI Configuration
-azure_endpoint = "https://theswedes.openai.azure.com/"
-api_key = "783973291a7c4a74a1120133309860c0"
-api_version = "2024-02-15-preview"
+# Access Azure OpenAI Configuration from Streamlit secrets
+azure_endpoint = st.secrets["AZURE_ENDPOINT"]
+api_key = st.secrets["API_KEY"]
+api_version = st.secrets["API_VERSION"]
 model = "GPT-4o-mini"
 
 
-# AzureOpenAI Client Setup
 class AzureOpenAI:
     def __init__(self, azure_endpoint, api_key, api_version):
         self.azure_endpoint = azure_endpoint
