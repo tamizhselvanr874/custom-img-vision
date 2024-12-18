@@ -15,6 +15,7 @@ api_key = "783973291a7c4a74a1120133309860c0"
 api_version = "2024-02-15-preview"
 model = "GPT-4o-mini"
 
+
 # AzureOpenAI Client Setup
 class AzureOpenAI:
     def __init__(self, azure_endpoint, api_key, api_version):
@@ -67,6 +68,10 @@ if "current_question_index" not in st.session_state:
     st.session_state.current_question_index = 0
 if "final_prompt" not in st.session_state:
     st.session_state.final_prompt = None
+if "selected_prompt" not in st.session_state:
+    st.session_state.selected_prompt = None
+if "awaiting_followup_response" not in st.session_state:
+    st.session_state.awaiting_followup_response = False
 
 # Define prompt categories and options
 PROMPT_CATEGORIES = {
@@ -98,7 +103,136 @@ PROMPT_CATEGORIES = {
             "An enormous floating castle in the sky, surrounded by fluffy white clouds, glowing waterfalls cascading from its edges, and magical birds flying around.",
         ),
     ],
-    # Add more categories as needed
+    "Professional Product Photography": [
+        (
+            "High-End Scotch Whiskey",
+            "Professional photograph of a high-end scotch whiskey presented on the table, eye level, warm cinematic, Sony A7 105mm, close-up, centred shot --ar 2:1",
+        ),
+        (
+            "Organic Pea Protein Powder",
+            "Professional photograph of organic pea protein powder packaged in high-end packaging - recyclable material, eye level, warm cinematic, Sony A7 105mm, close-up, centred shot, octane render --ar 2:1",
+        ),
+        (
+            "Hot Cappuccino",
+            "Freshly made hot cappuccino on glass table, angled top down, midday warm, Nikon D850 105mm, close-up, centred shot --ar 2:1",
+        ),
+        (
+            "Luxury Jewelry",
+            "Luxury high resolution jewelry, minimalist wedding band, angled top down, studio bright, Nikon D850 105mm, close-up centred shot --ar 2:1",
+        ),
+    ],
+    "Realistic Human Portraits": [
+        (
+            "Young Man in New York",
+            "Candid portrait of young man on a New York street, early 1900s, natural lighting, Nikon D850 35mm and f-stop 1.8, global illumination --ar 2:1",
+        ),
+        (
+            "Beautiful Woman on Busy Street",
+            "Candid photo portrait of beautiful woman on busy street, natural lighting, Nikon D850 105mm, f-stop 1.8, cinematic --ar 2:1",
+        ),
+        (
+            "Best Friends at Skatepark",
+            "A candid shot of young best friends dirty, at the skatepark, natural afternoon light, Canon EOS R5, 100mm, F 1.2 aperture setting capturing a moment, cinematic --ar 2:1",
+        ),
+    ],
+    "Logos and Brand Mascots": [
+        (
+            "Futuristic Worker Mascot",
+            "A worker mascot for a futuristic manufacturing company, simple, line art, iconic, vector art, flat design, sky blue theme, creamy beige background --ar 2:1",
+        ),
+        (
+            "Rustic Coffee Company Logo",
+            "An emblem logo for a rustic coffee company, 'Aroma Trails', minimalistic, line art, iconic, vector art, flat design, earthy brown and charcoal grey theme --ar 2:1",
+        ),
+        (
+            "Organic Skincare Brand Mascot",
+            "A soothing mascot for an organic skincare brand, minimalistic, line art, vector art, flat design --ar 2:1",
+        ),
+    ],
+    "Lifestyle Stock Images of People": [
+        (
+            "Loving Couple on Beach",
+            "A photograph of a couple caught in a loving moment with a scenic beach sunset as the background context, during dusk with soft, natural lighting and shot with a portrait lens, shot with a Sony Alpha a7 III, using the Sony FE 85mm f/1.4 GM lens --ar 2:1",
+        ),
+        (
+            "Intense Workout",
+            "A photograph of a lady engaged in an intense workout with a modern, well-equipped gym as the background context, during the morning with bright, natural lighting and shot with a telephoto lens, shot with a Canon EOS R5, using the Canon EF 70-200mm lens. --ar 2:1 --v 5.1 --s 200",
+        ),
+    ],
+    "Landscapes": [
+        (
+            "Tropical Rainforest",
+            "RAW photo, an award-winning National Geographic style HD photograph featuring the untamed beauty of the tropical rainforest. It's just after a rain shower at dusk, the orange-purple hues of twilight permeating the scene, casting long, dramatic shadows and creating a soft, diffused light that gives the landscape an almost ethereal feel. Taken using a Sony Alpha 1 with a 50mm f/1.8 lens, f/11 aperture, shutter speed 1/200s, ISO 100, This stunning image is rendered in insanely high resolution, realistic, 8k, HD, HDR, XDR, focus + sharpen + wide-angle 8K resolution + HDR10 Ken Burns effect + Adobe Lightroom + rule-of-thirds + high-detailed leaves + high-detailed bark + high-detailed feathers. An added touch of depth-of-field effect, lens flare, and digital negative are used to enhance the visual appeal. --ar 2:1",
+        ),
+        (
+            "Australian Outback",
+            "RAW photo, an award-winning National Geographic style HD photograph featuring the striking beauty of the Australian Outback. Weather conditions are dry, causing the landscape to take on a deep, sun-baked hue, the long shadows creating stark contrasts. Taken using a Sony Alpha 1 with a 50mm f/1.8 lens, f/11 aperture, shutter speed 1/200s, ISO 100, realistic, 8k, HD, HDR, XDR, focus + sharpen + wide-angle 8K resolution + HDR10 Ken Burns effect + Adobe Lightroom + rule-of-thirds + high-detailed leaves + high-detailed bark + high-detailed fur --ar 2:1",
+        ),
+        (
+            "Thai Beach",
+            "RAW photo, an award-winning National Geographic style HD photograph featuring the tranquil allure of a pristine Thai beach. Captured during the magic hour of sunset, the sky unfolds a symphony of pinks and oranges, casting a warm, romantic glow on the scenery. Taken using a Sony Alpha 1 with a 50mm f/1.8 lens, f/11 aperture, shutter speed 1/200s, ISO 100, This stunning image is rendered in insanely high resolution, realistic, 8k, HD, HDR, XDR, focus + sharpen + wide-angle 8K resolution + HDR10 Ken Burns effect + Adobe Lightroom + rule-of-thirds + high-detailed leaves + high-detailed bark. Effects of color grading, water motion blur, and starburst are incorporated for a visually arresting impact. --ar 2:1",
+        ),
+    ],
+    "Macro Photography": [
+        (
+            "Dewdrop on Spider Web",
+            "Extreme close-up by Oliver Dum, magnified view of a dewdrop on a spider web occupying the frame, the camera focuses closely on the object with the background blurred. The image is lit with natural sunlight, enhancing the vivid textures and contrasting colors.",
+        ),
+        (
+            "Weathered Coin",
+            "Ultra close-up macro photograph of an old, weathered coin found in the dirt while metal detecting, highlighting the worn inscriptions and patina, with natural, overcast light, and a gritty texture of the soil. The Canon EOS R5 focuses closely on the coin with the background blurred. The scene is ultra detailed with realistic textures resembling a photograph taken using a Canon EF 100mm f/2.8L Macro IS USM lens.",
+        ),
+        (
+            "Butterfly Wing",
+            "Extreme close-up by Oliver Dum, magnified view of a butterfly wing occupying the frame, the camera focuses closely on the object with the background blurred. The image is lit with natural sunlight, enhancing the vivid textures.",
+        ),
+    ],
+    "YouTube Thumbnails": [
+        (
+            "Alex Hormozi Thumbnail",
+            "Generic Alex Hormozi YouTube thumbnail --ar 16:9 --s 200 --c 50",
+        ),
+        (
+            "iPhone Review Thumbnail",
+            "iPhone review YouTube thumbnail --ar 16:9 --c 1",
+        ),
+        (
+            "Man with Monkeys Thumbnail",
+            "Typical YouTube thumbnail featuring a man with an open mouth standing in front of a group of monkeys. Turn on RTX for realistic detail. --ar 16:9",
+        ),
+        (
+            "Typical Thumbnail",
+            "Typical YouTube Thumbnail --ar 16:9 --s {100, 200, 600, 1000} --c {1, 50, 100}",
+        ),
+    ],
+    "Oil Paintings": [
+        (
+            "Serene Lakeside",
+            "A serene lakeside scene at sunset with visible brushwork. Impasto texture and chiaroscuro lighting, emulating the style of a classical oil painting --ar 2:1",
+        ),
+        (
+            "European Café",
+            "Capture a bustling European café scene, complete with intricate details, such as filigree ironwork and cobblestone streets. Use impasto technique for texture and employ sfumato for a smoky atmosphere, in the tradition of old master oil paintings. --ar 2:1 --s 600 --c 100",
+        ),
+        (
+            "Autumn Forest",
+            "Create an image of a tranquil autumn forest with a meandering stream. Use palette-knife strokes for a textured appearance, incorporating Afremov's signature bold and vibrant color palette. --ar 2:1 --c 50",
+        ),
+    ],
+    "Ultra Realistic Foods": [
+        (
+            "Grilled Fish and Chips",
+            "Midjourney generated image of grilled fish and chips STYLE: Close-up shot | GENRE: Gourmet | EMOTION: Tempting | SCENE: A plate of freshly grilled fish and chips with seasoning and garnish | TAGS: High-end food photography, clean composition, dramatic lighting, luxurious, elegant, mouth-watering, indulgent, gourmet | CAMERA: Nikon Z7 | FOCAL LENGTH: 105mm | SHOT TYPE: Close-up | COMPOSITION: Centered | LIGHTING: Soft, directional | PRODUCTION: Food Stylist| TIME: Evening --ar 16:8",
+        ),
+        (
+            "Pavlova Dessert",
+            "Midjourney generated image of pavlova desert PRESENTATION: Macro Lens | CUISINE TYPE: Upscale | AMBIENCE: Alluring | VISUALS: Desert serving of Pavlova | ATTRIBUTES: Upscale gastronomy imagery, seamless arrangement, intense yet elegant spotlight, sumptuous, refined, irresistible, lavish, gourmet | TOOL: Nikon Z7 | LENS DETAIL: 105mm | SHOT PERSPECTIVE: Close Proximity | ALIGNMENT: Equilibrium in focus | ILLUMINATION CHARACTERISTICS: Subtle, with a single point of origin | BEHIND THE SCENES: Gourmet Arrangement Specialist | PHOTO SESSION TIMING: Twilight --ar 16:8",
+        ),
+        (
+            "Burgers",
+            "Midjourney Burgers APPROACH: Detailed Focus | CATEGORY: High-end Cuisine | MOOD: Inviting | DESCRIPTION: Fresh beef burger with vibrant salads and beautiful pillow buns | KEYWORDS: Sophisticated food capture, neat framing, evocative illumination, posh, graceful, drool-inducing, decadent, gourmet | EQUIPMENT: Nikon Z7 | LENS: 105mm | SHOT NATURE: Close-range | FRAME: Balanced Central | ILLUMINATION: Gentle, from one direction | CREW: Culinary Stylist| SHOOTING SCHEDULE: Dusk --ar",
+        ),
+    ],
 }
 
 st.title("Interactive Image Chat Generation")
@@ -183,6 +317,24 @@ def finalize_prompt(conversation):
     return call_azure_openai(messages, 750, 0.7)
 
 
+def modify_prompt_with_llm(initial_prompt, user_instruction):
+    # Use the language model to apply specific user changes to the prompt
+    prompt = f"""  
+    You are an assistant that modifies image descriptions based on user input.  
+    Given the initial description: "{initial_prompt}"  
+    And the user instruction: "{user_instruction}"  
+    Apply the user's instruction to the initial description, making only the changes necessary to accurately incorporate the user's request.  
+    """
+    messages = [
+        {
+            "role": "system",
+            "content": "You are an assistant that applies specific user changes to prompts.",
+        },
+        {"role": "user", "content": prompt},
+    ]
+    return call_azure_openai(messages, 150, 0.7)
+
+
 def generate_image(prompt):
     try:
         response = requests.post(
@@ -230,10 +382,15 @@ def display_prompt_library():
                     st.session_state.messages.append(
                         {
                             "role": "assistant",
-                            "content": f"Let's start refining your idea: {prompt}",
+                            "content": f"Selected prompt: {prompt}",
                         }
                     )
-                    st.session_state.awaiting_followup_response = True
+                    st.session_state.final_prompt = (
+                        prompt  # Directly use selected prompt
+                    )
+                    st.session_state.awaiting_followup_response = (
+                        False  # Avoid follow-up questions
+                    )
                     return
 
 
@@ -255,26 +412,43 @@ def chat_interface():
                     "content": f"*Final Prompt:* {st.session_state.final_prompt}",
                 }
             )
-
     elif user_input:
         st.session_state.messages.append({"role": "user", "content": user_input})
 
-        # Existing logic with dynamic questions
-        if st.session_state.current_question_index < 6:  # Ask 6 questions
-            context = " ".join([msg["content"] for msg in st.session_state.messages])
-            dynamic_question = generate_dynamic_questions(user_input, context)
-            st.session_state.messages.append(
-                {"role": "assistant", "content": dynamic_question}
+        # If a prompt from the library is selected, modify it directly
+        if st.session_state.selected_prompt:
+            modified_prompt = modify_prompt_with_llm(
+                st.session_state.selected_prompt, user_input
             )
-            st.session_state.current_question_index += 1
-        else:
-            st.session_state.final_prompt = finalize_prompt(st.session_state.messages)
+            st.session_state.final_prompt = modified_prompt
             st.session_state.messages.append(
                 {
                     "role": "assistant",
                     "content": f"*Final Prompt:* {st.session_state.final_prompt}",
                 }
             )
+            st.session_state.selected_prompt = None
+        else:
+            # Existing logic with dynamic questions
+            if st.session_state.current_question_index < 6:  # Ask 6 questions
+                context = " ".join(
+                    [msg["content"] for msg in st.session_state.messages]
+                )
+                dynamic_question = generate_dynamic_questions(user_input, context)
+                st.session_state.messages.append(
+                    {"role": "assistant", "content": dynamic_question}
+                )
+                st.session_state.current_question_index += 1
+            else:
+                st.session_state.final_prompt = finalize_prompt(
+                    st.session_state.messages
+                )
+                st.session_state.messages.append(
+                    {
+                        "role": "assistant",
+                        "content": f"*Final Prompt:* {st.session_state.final_prompt}",
+                    }
+                )
 
     display_prompt_library()
 
@@ -293,11 +467,11 @@ def chat_interface():
 
 def generate_dynamic_questions(user_input, conversation_history):
     prompt = f"""  
-    We are working with the initial concept: "{user_input}".  
-    Given the conversation so far: "{conversation_history}", generate a follow-up question or suggestion that explores one of the following aspects: colors, textures, shapes, lighting, depth, or style.  
-    The question should be engaging, concise and encourage the user to think creatively about their concept.  
-    Additionally, provide a short recommendation to inspire the user further.  
-    """
+      We are working with the initial concept: "{user_input}".  
+      Given the conversation so far: "{conversation_history}", generate a follow-up question or suggestion that explores one of the following aspects: colors, textures, shapes, lighting, depth, or style.  
+      The question should be engaging, concise and encourage the user to think creatively about their concept.  
+      Additionally, provide a short recommendation to inspire the user further.  
+      """
     messages = [
         {
             "role": "system",
