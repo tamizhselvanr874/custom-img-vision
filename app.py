@@ -1,17 +1,19 @@
-import streamlit as st
+import os
 import requests
+import streamlit as st
+from dotenv import load_dotenv
 from PIL import Image
 from io import BytesIO
 import base64
 import logging
 import time
 
+load_dotenv()
 logging.basicConfig(level=logging.INFO)
 
-# Access Azure OpenAI Configuration from Streamlit secrets
-azure_endpoint = st.secrets["AZURE_ENDPOINT"]
-api_key = st.secrets["API_KEY"]
-api_version = st.secrets["API_VERSION"]
+azure_endpoint = os.getenv("AZURE_ENDPOINT")
+api_key = os.getenv("API_KEY")
+api_version = os.getenv("API_VERSION")
 model = "GPT-4o-mini"
 
 
@@ -48,18 +50,13 @@ class AzureOpenAI:
                     logging.info(f"Retrying in {delay} seconds...")
                     time.sleep(delay)
                 else:
-                    raise
+                    raise RuntimeError("Max attempts reached") from e
 
 
-client = AzureOpenAI(
-    azure_endpoint=azure_endpoint,
-    api_key=api_key,
-    api_version=api_version,
-)
+client = AzureOpenAI(azure_endpoint, api_key, api_version)
 
 IMAGE_GENERATION_URL = "https://afsimage.azurewebsites.net/api/httpTriggerts"
 
-# Initialize session state variables
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "current_question_index" not in st.session_state:
@@ -70,8 +67,9 @@ if "selected_prompt" not in st.session_state:
     st.session_state.selected_prompt = None
 if "awaiting_followup_response" not in st.session_state:
     st.session_state.awaiting_followup_response = False
+if "recommendations" not in st.session_state:
+    st.session_state.recommendations = []
 
-# Define prompt categories and options
 PROMPT_CATEGORIES = {
     "Nature and Landscapes": [
         (
@@ -220,15 +218,15 @@ PROMPT_CATEGORIES = {
     "Ultra Realistic Foods": [
         (
             "Grilled Fish and Chips",
-            "Midjourney generated image of grilled fish and chips STYLE: Close-up shot | GENRE: Gourmet | EMOTION: Tempting | SCENE: A plate of freshly grilled fish and chips with seasoning and garnish | TAGS: High-end food photography, clean composition, dramatic lighting, luxurious, elegant, mouth-watering, indulgent, gourmet | CAMERA: Nikon Z7 | FOCAL LENGTH: 105mm | SHOT TYPE: Close-up | COMPOSITION: Centered | LIGHTING: Soft, directional | PRODUCTION: Food Stylist| TIME: Evening --ar 16:8",
+            "Image of grilled fish and chips STYLE: Close-up shot | GENRE: Gourmet | EMOTION: Tempting | SCENE: A plate of freshly grilled fish and chips with seasoning and garnish | TAGS: High-end food photography, clean composition, dramatic lighting, luxurious, elegant, mouth-watering, indulgent, gourmet | CAMERA: Nikon Z7 | FOCAL LENGTH: 105mm | SHOT TYPE: Close-up | COMPOSITION: Centered | LIGHTING: Soft, directional | PRODUCTION: Food Stylist| TIME: Evening --ar 16:8",
         ),
         (
             "Pavlova Dessert",
-            "Midjourney generated image of pavlova desert PRESENTATION: Macro Lens | CUISINE TYPE: Upscale | AMBIENCE: Alluring | VISUALS: Desert serving of Pavlova | ATTRIBUTES: Upscale gastronomy imagery, seamless arrangement, intense yet elegant spotlight, sumptuous, refined, irresistible, lavish, gourmet | TOOL: Nikon Z7 | LENS DETAIL: 105mm | SHOT PERSPECTIVE: Close Proximity | ALIGNMENT: Equilibrium in focus | ILLUMINATION CHARACTERISTICS: Subtle, with a single point of origin | BEHIND THE SCENES: Gourmet Arrangement Specialist | PHOTO SESSION TIMING: Twilight --ar 16:8",
+            "Image of pavlova dessert PRESENTATION: Macro Lens | CUISINE TYPE: Upscale | AMBIENCE: Alluring | VISUALS: Dessert serving of Pavlova | ATTRIBUTES: Upscale gastronomy imagery, seamless arrangement, intense yet elegant spotlight, sumptuous, refined, irresistible, lavish, gourmet | TOOL: Nikon Z7 | LENS DETAIL: 105mm | SHOT PERSPECTIVE: Close Proximity | ALIGNMENT: Equilibrium in focus | ILLUMINATION CHARACTERISTICS: Subtle, with a single point of origin | BEHIND THE SCENES: Gourmet Arrangement Specialist | PHOTO SESSION TIMING: Twilight --ar 16:8",
         ),
         (
             "Burgers",
-            "Midjourney Burgers APPROACH: Detailed Focus | CATEGORY: High-end Cuisine | MOOD: Inviting | DESCRIPTION: Fresh beef burger with vibrant salads and beautiful pillow buns | KEYWORDS: Sophisticated food capture, neat framing, evocative illumination, posh, graceful, drool-inducing, decadent, gourmet | EQUIPMENT: Nikon Z7 | LENS: 105mm | SHOT NATURE: Close-range | FRAME: Balanced Central | ILLUMINATION: Gentle, from one direction | CREW: Culinary Stylist| SHOOTING SCHEDULE: Dusk --ar",
+            "Image of burgers APPROACH: Detailed Focus | CATEGORY: High-end Cuisine | MOOD: Inviting | DESCRIPTION: Fresh beef burger with vibrant salads and beautiful pillow buns | KEYWORDS: Sophisticated food capture, neat framing, evocative illumination, posh, graceful, drool-inducing, decadent, gourmet | EQUIPMENT: Nikon Z7 | LENS: 105mm | SHOT NATURE: Close-range | FRAME: Balanced Central | ILLUMINATION: Gentle, from one direction | CREW: Culinary Stylist| SHOOTING SCHEDULE: Dusk --ar",
         ),
     ],
 }
@@ -254,10 +252,7 @@ def get_image_explanation(base64_image):
             {
                 "role": "user",
                 "content": [
-                    {
-                        "type": "text",
-                        "text": "Explain the content of this image in a single, coherent paragraph. The explanation should be concise and semantically meaningful, summarizing all major points from the image in one paragraph. Avoid using bullet points or separate lists.",
-                    },
+                    {"type": "text", "text": "Explain the content of this image..."},
                     {
                         "type": "image_url",
                         "image_url": {"url": f"data:image/png;base64,{base64_image}"},
@@ -267,7 +262,6 @@ def get_image_explanation(base64_image):
         ],
         "temperature": 0.7,
     }
-
     try:
         response = requests.post(
             f"{azure_endpoint}/openai/deployments/{model}/chat/completions?api-version={api_version}",
@@ -276,13 +270,10 @@ def get_image_explanation(base64_image):
         )
         response.raise_for_status()
         result = response.json()
-        explanation = result["choices"][0]["message"]["content"]
-        return explanation
-    except requests.exceptions.HTTPError as http_err:
-        logging.error(f"HTTP error occurred: {http_err}")
-    except Exception as e:
-        logging.error(f"An error occurred: {e}")
-    return "Failed to get image explanation."
+        return result["choices"][0]["message"]["content"]
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Request error: {e}")
+        return "Failed to get image explanation."
 
 
 def call_azure_openai(messages, max_tokens, temperature):
@@ -295,42 +286,43 @@ def call_azure_openai(messages, max_tokens, temperature):
         )
         return response["choices"][0]["message"]["content"].strip()
     except Exception as e:
-        return f"Error: {str(e)}"
+        logging.error(f"OpenAI API call failed: {e}")
+        return "Error in API call."
 
 
 def finalize_prompt(conversation):
-    prompt = "Craft a concise and comprehensive image prompt using the specific details provided by the user in the conversation. "
-    prompt += "Incorporate all relevant graphical elements discussed, such as colors, textures, shapes, lighting, depth, and style, without making assumptions or adding speculative details. "
-    prompt += "Ensure the prompt is clear, structured, and accurately reflects the user's inputs. "
-    prompt += "End by asking: 'Are you okay with the prompt? Are there any things that need to be adjusted?'"
-    for turn in conversation:
-        if turn["role"] == "user":
-            prompt += f"User: {turn['content']}. "
-        elif turn["role"] == "assistant":
-            prompt += f"Assistant: {turn['content']}. "
-    messages = [
-        {"role": "system", "content": "You are a helpful AI assistant."},
-        {"role": "user", "content": prompt},
-    ]
-    return call_azure_openai(messages, 750, 0.7)
-
-
-def modify_prompt_with_llm(initial_prompt, user_instruction):
-    # Use the language model to apply specific user changes to the prompt
-    prompt = f"""  
-    You are an assistant that modifies image descriptions based on user input.  
-    Given the initial description: "{initial_prompt}"  
-    And the user instruction: "{user_instruction}"  
-    Apply the user's instruction to the initial description, making only the changes necessary to accurately incorporate the user's request.  
-    """
+    user_details = "\n".join(
+        f"{turn['role'].capitalize()}: {turn['content']}" for turn in conversation
+    )
+    prompt = (
+        "Based on the conversation below, create a concise and detailed image description..."
+        f"Conversation:\n{user_details}\nFinal Image Description:"
+    )
     messages = [
         {
             "role": "system",
-            "content": "You are an assistant that applies specific user changes to prompts.",
+            "content": "You are an AI assistant that creates detailed image prompts...",
         },
         {"role": "user", "content": prompt},
     ]
-    return call_azure_openai(messages, 150, 0.7)
+    return call_azure_openai(messages, 750, 0.7) or "Failed to finalize prompt."
+
+
+def modify_prompt_with_llm(initial_prompt, user_instruction):
+    prompt = (
+        f"You are an assistant that modifies image descriptions based on user input.\n"
+        f"Initial Description:\n{initial_prompt}\n\n"
+        f"User Instruction:\n{user_instruction}\n\n"
+        "Please update the initial description by incorporating the user's instruction..."
+    )
+    messages = [
+        {
+            "role": "system",
+            "content": "You are skilled at updating image descriptions...",
+        },
+        {"role": "user", "content": prompt},
+    ]
+    return call_azure_openai(messages, 150, 0.7) or "Failed to modify prompt."
 
 
 def generate_image(prompt):
@@ -342,16 +334,15 @@ def generate_image(prompt):
         )
         if response.status_code == 200:
             data = response.json()
-            if "imageUrls" in data and data["imageUrls"]:
-                return data["imageUrls"][0]
-        return "Failed to generate image."
-    except Exception as e:
-        return f"Error: {str(e)}"
+            return data.get("imageUrls", ["Failed to generate image."])[0]
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Image generation failed: {e}")
+    return "Failed to generate image."
 
 
 def display_image_options(image_url, image_caption):
     if image_url:
-        st.sidebar.image(image_url, caption=image_caption, use_container_width=True)
+        st.sidebar.image(image_url, caption=image_caption, use_column_width=True)
         image_data = requests.get(image_url).content
         st.sidebar.download_button(
             label=f"Download {image_caption}",
@@ -374,22 +365,20 @@ def display_prompt_library():
         st.write("*Prompt Library:*")
         for category, prompts in PROMPT_CATEGORIES.items():
             st.write(f"### {category}")
-            for title, prompt in prompts:
-                if st.button(title):
-                    st.session_state.selected_prompt = prompt
-                    st.session_state.messages.append(
-                        {
-                            "role": "assistant",
-                            "content": f"Selected prompt: {prompt}",
-                        }
-                    )
-                    st.session_state.final_prompt = (
-                        prompt  # Directly use selected prompt
-                    )
-                    st.session_state.awaiting_followup_response = (
-                        False  # Avoid follow-up questions
-                    )
-                    return
+            columns = st.columns(len(prompts))
+            for col, (title, prompt) in zip(columns, prompts):
+                with col:
+                    if st.button(title):
+                        st.session_state.selected_prompt = prompt
+                        st.session_state.messages.append(
+                            {
+                                "role": "assistant",
+                                "content": f"Selected prompt: {prompt}",
+                            }
+                        )
+                        st.session_state.final_prompt = prompt
+                        st.session_state.awaiting_followup_response = False
+                        return
 
 
 def chat_interface():
@@ -402,7 +391,6 @@ def chat_interface():
         handle_image_input(image_file)
         if user_input:
             st.session_state.messages.append({"role": "user", "content": user_input})
-            # Directly finalize prompt after image explanation and user input
             st.session_state.final_prompt = finalize_prompt(st.session_state.messages)
             st.session_state.messages.append(
                 {
@@ -412,8 +400,6 @@ def chat_interface():
             )
     elif user_input:
         st.session_state.messages.append({"role": "user", "content": user_input})
-
-        # If a prompt from the library is selected, modify it directly
         if st.session_state.selected_prompt:
             modified_prompt = modify_prompt_with_llm(
                 st.session_state.selected_prompt, user_input
@@ -427,15 +413,14 @@ def chat_interface():
             )
             st.session_state.selected_prompt = None
         else:
-            # Existing logic with dynamic questions
-            if st.session_state.current_question_index < 6:  # Ask 6 questions
-                context = " ".join(
-                    [msg["content"] for msg in st.session_state.messages]
-                )
+            if st.session_state.current_question_index < 6:
+                context = " ".join(msg["content"] for msg in st.session_state.messages)
                 dynamic_question = generate_dynamic_questions(user_input, context)
                 st.session_state.messages.append(
                     {"role": "assistant", "content": dynamic_question}
                 )
+                recommendation = generate_recommendation(user_input, context)
+                st.session_state.recommendations.append(recommendation)
                 st.session_state.current_question_index += 1
             else:
                 st.session_state.final_prompt = finalize_prompt(
@@ -450,9 +435,12 @@ def chat_interface():
 
     display_prompt_library()
 
-    for message in st.session_state.messages:
+    for i, message in enumerate(st.session_state.messages):
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
+        if i < len(st.session_state.recommendations):
+            if st.checkbox(f"Show recommendation for message {i + 1}", key=f"rec_{i}"):
+                st.markdown(f"Recommendation: {st.session_state.recommendations[i]}")
 
     if st.session_state.final_prompt and st.button("Generate Image"):
         image_url = generate_image(st.session_state.final_prompt)
@@ -464,22 +452,40 @@ def chat_interface():
 
 
 def generate_dynamic_questions(user_input, conversation_history):
-    prompt = f"""  
-      We are working with the initial concept: "{user_input}".  
-      Given the conversation so far: "{conversation_history}", generate a follow-up question or suggestion that explores one of the following aspects: colors, textures, shapes, lighting, depth, or style.  
-      The question should be engaging, concise and encourage the user to think creatively about their concept.  
-      Additionally, provide a short recommendation to inspire the user further.  
-      """
+    prompt = (
+        f'We are working with the initial concept:\n"{user_input}"\n\n'
+        f"Conversation so far:\n{conversation_history}\n\n"
+        "Please generate a follow-up question that explores one aspect such as colors, textures, shapes, lighting, depth, or style."
+    )
     messages = [
         {
             "role": "system",
-            "content": "You are a creative assistant who generates insightful questions to refine image prompts, along with concise recommendations.",
+            "content": "You are a creative assistant who generates insightful questions and recommendations.",
         },
         {"role": "user", "content": prompt},
     ]
     response_content = call_azure_openai(messages, 750, 0.8)
-    question, recommendation = response_content.split("Recommendation:", 1)
-    return f"{question.strip()}Recommendation:{recommendation.strip()}"
+    return (
+        response_content.strip()
+        if response_content
+        else "Couldn't generate a question."
+    )
+
+
+def generate_recommendation(user_input, conversation_history):
+    prompt = (
+        f'We are working with the initial concept: "{user_input}". '
+        f'Given the conversation so far: "{conversation_history}", generate a short recommendation to inspire the user further.'
+    )
+    messages = [
+        {
+            "role": "system",
+            "content": "You are a creative assistant who generates concise recommendations.",
+        },
+        {"role": "user", "content": prompt},
+    ]
+    recommendation = call_azure_openai(messages, 150, 0.8)
+    return recommendation.strip()
 
 
 chat_interface()
