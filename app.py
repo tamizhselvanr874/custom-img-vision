@@ -54,7 +54,6 @@ class AzureOpenAI:
 
 
 client = AzureOpenAI(azure_endpoint, api_key, api_version)
-
 IMAGE_GENERATION_URL = "https://afsimage.azurewebsites.net/api/httpTriggerts"
 
 if "messages" not in st.session_state:
@@ -70,6 +69,7 @@ if "awaiting_followup_response" not in st.session_state:
 if "recommendations" not in st.session_state:
     st.session_state.recommendations = []
 
+# Define prompt categories and options
 PROMPT_CATEGORIES = {
     "Nature and Landscapes": [
         (
@@ -91,7 +91,7 @@ PROMPT_CATEGORIES = {
             "A sprawling cyberpunk city at night, with neon-lit skyscrapers, flying cars, bustling streets filled with holographic signs, and a vibrant nightlife.",
         ),
         (
-            "Historical Monuments",
+            "Monuments",
             "A beautifully detailed Roman colosseum at dusk, surrounded by lush greenery and tourists admiring the historic grandeur.",
         ),
         (
@@ -101,11 +101,11 @@ PROMPT_CATEGORIES = {
     ],
     "Professional Product Photography": [
         (
-            "High-End Scotch Whiskey",
+            "Scotch Whiskey",
             "Professional photograph of a high-end scotch whiskey presented on the table, eye level, warm cinematic, Sony A7 105mm, close-up, centred shot --ar 2:1",
         ),
         (
-            "Organic Pea Protein Powder",
+            "Pea Powder",
             "Professional photograph of organic pea protein powder packaged in high-end packaging - recyclable material, eye level, warm cinematic, Sony A7 105mm, close-up, centred shot, octane render --ar 2:1",
         ),
         (
@@ -147,7 +147,7 @@ PROMPT_CATEGORIES = {
     ],
     "Lifestyle Stock Images of People": [
         (
-            "Loving Couple on Beach",
+            "Couple on Beach",
             "A photograph of a couple caught in a loving moment with a scenic beach sunset as the background context, during dusk with soft, natural lighting and shot with a portrait lens, shot with a Sony Alpha a7 III, using the Sony FE 85mm f/1.4 GM lens --ar 2:1",
         ),
         (
@@ -171,7 +171,7 @@ PROMPT_CATEGORIES = {
     ],
     "Macro Photography": [
         (
-            "Dewdrop on Spider Web",
+            "Spider Web",
             "Extreme close-up by Oliver Dum, magnified view of a dewdrop on a spider web occupying the frame, the camera focuses closely on the object with the background blurred. The image is lit with natural sunlight, enhancing the vivid textures and contrasting colors.",
         ),
         (
@@ -196,10 +196,6 @@ PROMPT_CATEGORIES = {
             "Man with Monkeys Thumbnail",
             "Typical YouTube thumbnail featuring a man with an open mouth standing in front of a group of monkeys. Turn on RTX for realistic detail. --ar 16:9",
         ),
-        (
-            "Typical Thumbnail",
-            "Typical YouTube Thumbnail --ar 16:9 --s {100, 200, 600, 1000} --c {1, 50, 100}",
-        ),
     ],
     "Oil Paintings": [
         (
@@ -217,16 +213,16 @@ PROMPT_CATEGORIES = {
     ],
     "Ultra Realistic Foods": [
         (
-            "Grilled Fish and Chips",
-            "Image of grilled fish and chips STYLE: Close-up shot | GENRE: Gourmet | EMOTION: Tempting | SCENE: A plate of freshly grilled fish and chips with seasoning and garnish | TAGS: High-end food photography, clean composition, dramatic lighting, luxurious, elegant, mouth-watering, indulgent, gourmet | CAMERA: Nikon Z7 | FOCAL LENGTH: 105mm | SHOT TYPE: Close-up | COMPOSITION: Centered | LIGHTING: Soft, directional | PRODUCTION: Food Stylist| TIME: Evening --ar 16:8",
+            "Grilled Fish",
+            "Midjourney generated image of grilled fish and chips STYLE: Close-up shot | GENRE: Gourmet | EMOTION: Tempting | SCENE: A plate of freshly grilled fish and chips with seasoning and garnish | TAGS: High-end food photography, clean composition, dramatic lighting, luxurious, elegant, mouth-watering, indulgent, gourmet | CAMERA: Nikon Z7 | FOCAL LENGTH: 105mm | SHOT TYPE: Close-up | COMPOSITION: Centered | LIGHTING: Soft, directional | PRODUCTION: Food Stylist| TIME: Evening --ar 16:8",
         ),
         (
             "Pavlova Dessert",
-            "Image of pavlova dessert PRESENTATION: Macro Lens | CUISINE TYPE: Upscale | AMBIENCE: Alluring | VISUALS: Dessert serving of Pavlova | ATTRIBUTES: Upscale gastronomy imagery, seamless arrangement, intense yet elegant spotlight, sumptuous, refined, irresistible, lavish, gourmet | TOOL: Nikon Z7 | LENS DETAIL: 105mm | SHOT PERSPECTIVE: Close Proximity | ALIGNMENT: Equilibrium in focus | ILLUMINATION CHARACTERISTICS: Subtle, with a single point of origin | BEHIND THE SCENES: Gourmet Arrangement Specialist | PHOTO SESSION TIMING: Twilight --ar 16:8",
+            "Midjourney generated image of pavlova desert PRESENTATION: Macro Lens | CUISINE TYPE: Upscale | AMBIENCE: Alluring | VISUALS: Desert serving of Pavlova | ATTRIBUTES: Upscale gastronomy imagery, seamless arrangement, intense yet elegant spotlight, sumptuous, refined, irresistible, lavish, gourmet | TOOL: Nikon Z7 | LENS DETAIL: 105mm | SHOT PERSPECTIVE: Close Proximity | ALIGNMENT: Equilibrium in focus | ILLUMINATION CHARACTERISTICS: Subtle, with a single point of origin | BEHIND THE SCENES: Gourmet Arrangement Specialist | PHOTO SESSION TIMING: Twilight --ar 16:8",
         ),
         (
             "Burgers",
-            "Image of burgers APPROACH: Detailed Focus | CATEGORY: High-end Cuisine | MOOD: Inviting | DESCRIPTION: Fresh beef burger with vibrant salads and beautiful pillow buns | KEYWORDS: Sophisticated food capture, neat framing, evocative illumination, posh, graceful, drool-inducing, decadent, gourmet | EQUIPMENT: Nikon Z7 | LENS: 105mm | SHOT NATURE: Close-range | FRAME: Balanced Central | ILLUMINATION: Gentle, from one direction | CREW: Culinary Stylist| SHOOTING SCHEDULE: Dusk --ar",
+            "Midjourney Burgers APPROACH: Detailed Focus | CATEGORY: High-end Cuisine | MOOD: Inviting | DESCRIPTION: Fresh beef burger with vibrant salads and beautiful pillow buns | KEYWORDS: Sophisticated food capture, neat framing, evocative illumination, posh, graceful, drool-inducing, decadent, gourmet | EQUIPMENT: Nikon Z7 | LENS: 105mm | SHOT NATURE: Close-range | FRAME: Balanced Central | ILLUMINATION: Gentle, from one direction | CREW: Culinary Stylist| SHOOTING SCHEDULE: Dusk --ar",
         ),
     ],
 }
@@ -364,11 +360,13 @@ def display_prompt_library():
     with st.sidebar:
         st.write("*Prompt Library:*")
         for category, prompts in PROMPT_CATEGORIES.items():
-            st.write(f"### {category}")
-            columns = st.columns(len(prompts))
-            for col, (title, prompt) in zip(columns, prompts):
+            st.markdown(f"#### {category}")
+            num_columns = 3  # Adjust this number based on your preference
+            columns = st.columns(num_columns)
+            for i, (title, prompt) in enumerate(prompts):
+                col = columns[i % num_columns]
                 with col:
-                    if st.button(title):
+                    if st.button(title, key=f"{category}_{title}"):
                         st.session_state.selected_prompt = prompt
                         st.session_state.messages.append(
                             {
@@ -434,7 +432,6 @@ def chat_interface():
                 )
 
     display_prompt_library()
-
     for i, message in enumerate(st.session_state.messages):
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
